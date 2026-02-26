@@ -17,6 +17,10 @@ COL_MONDAI = 2
 COL_KURUSHIMI = 3
 COL_KAITO = 4
 
+# 回答ボタンのラベル（必ず「問題」と「苦しみ」）
+LABEL_MONDAI = "\u554f\u984c"    # 問題
+LABEL_KURUSHIMI = "\u82e6\u3057\u307f"  # 苦しみ
+
 
 def load_data(excel_path):
     """Excelを読み込み、行リストを返す。"""
@@ -41,11 +45,11 @@ def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
     for row in chosen:
         show_mondai = random.choice([True, False])
         if show_mondai and row["問題"]:
-            example_text, correct_label = row["問題"], "問題"
+            example_text, correct_label = row["問題"], LABEL_MONDAI
         elif row["苦しみ"]:
-            example_text, correct_label = row["苦しみ"], "苦しみ"
+            example_text, correct_label = row["苦しみ"], LABEL_KURUSHIMI
         else:
-            example_text, correct_label = row["問題"], "問題"
+            example_text, correct_label = row["問題"], LABEL_MONDAI
         result.append({
             "出来事": row["出来事"],
             "例文": example_text,
@@ -92,6 +96,8 @@ if "last_wrong_detail" not in st.session_state:
 tab_quiz, tab_contact = st.tabs(["📝 テスト", "✉️ お問い合わせ"])
 
 with tab_quiz:
+    # 正しいバージョン確認用（ボタンは「問題」と「苦しみ」です）
+    st.caption("選択肢は **問題** と **苦しみ** です。（「わたし」「考え方」と出る場合は古いバージョンです）")
     # データ読み込み（同フォルダの Excel またはアップロード）
     excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "問題と苦しみ.xlsx")
     data = []
@@ -148,40 +154,42 @@ with tab_quiz:
                 st.markdown("---")
             else:
                 idx = st.session_state.current_index
-                st.markdown("### 次の例文は「問題」と「苦しみ」のどちらに当たりますか？")
+                st.markdown(f"### 次の例文は「{LABEL_MONDAI}」と「{LABEL_KURUSHIMI}」のどちらに当たりますか？")
                 st.markdown("**【出来事】**")
                 st.write(q["出来事"])
                 st.markdown("**【どのように感じたか】**")
                 st.info(q["例文"])
+                st.caption("※ まだ選択されていません。下のどちらか一方をクリックしてください。")
                 col1, col2, _ = st.columns([1, 1, 2])
                 with col1:
-                    if st.button("　問題　", key=f"mondai_{idx}", use_container_width=True):
-                        is_correct = "問題" == q["正解"]
+                    if st.button(LABEL_MONDAI, key=f"mondai_{idx}", use_container_width=True):
+                        is_correct = LABEL_MONDAI == q["正解"]
                         if is_correct:
                             st.session_state.correct_count += 1
                         else:
                             st.session_state.wrong_answers.append({
                                 "出来事": q["出来事"], "例文": q["例文"], "正解": q["正解"],
-                                "解説": q["解説"], "ユーザーの回答": "問題",
+                                "解説": q["解説"], "ユーザーの回答": LABEL_MONDAI,
                             })
                         st.session_state.answered_current = True
                         st.session_state.last_correct = is_correct
                         st.session_state.last_wrong_detail = q if not is_correct else None
                         st.rerun()
                 with col2:
-                    if st.button("　苦しみ　", key=f"kurushimi_{idx}", use_container_width=True):
-                        is_correct = "苦しみ" == q["正解"]
+                    if st.button(LABEL_KURUSHIMI, key=f"kurushimi_{idx}", use_container_width=True):
+                        is_correct = LABEL_KURUSHIMI == q["正解"]
                         if is_correct:
                             st.session_state.correct_count += 1
                         else:
                             st.session_state.wrong_answers.append({
                                 "出来事": q["出来事"], "例文": q["例文"], "正解": q["正解"],
-                                "解説": q["解説"], "ユーザーの回答": "苦しみ",
+                                "解説": q["解説"], "ユーザーの回答": LABEL_KURUSHIMI,
                             })
                         st.session_state.answered_current = True
                         st.session_state.last_correct = is_correct
                         st.session_state.last_wrong_detail = q if not is_correct else None
                         st.rerun()
+                st.caption(f"選択肢: **{LABEL_MONDAI}** / **{LABEL_KURUSHIMI}**")
 
         else:
             total = len(st.session_state.questions)
@@ -213,7 +221,7 @@ with tab_quiz:
                 st.rerun()
 
 with tab_contact:
-    st.markdown("### お仕事のご依頼やご質問はこちらからご連絡ください。")
+    st.markdown("### ご質問やお仕事のご依頼はこちらからご連絡ください。")
     with st.form("contact_form"):
         name = st.text_input("お名前 *")
         company = st.text_input("会社名・団体名")
