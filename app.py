@@ -251,7 +251,6 @@ if data:
                     st.rerun()
             with col2:
                 st.markdown(f'<p lang="ja" translate="no" style="text-align:center; font-weight:600; margin-bottom:0.2rem;">{LABEL_KURUSHIMI}</p>', unsafe_allow_html=True)
-                st.markdown('<p lang="en" translate="no" style="text-align:center; font-weight:600; margin-bottom:0.2rem;">PUSH</p>', unsafe_allow_html=True)
                 if st.button("▶", key=f"kurushimi_{idx}", use_container_width=True):
                     is_correct = LABEL_KURUSHIMI == q["正解"]
                     if is_correct:
