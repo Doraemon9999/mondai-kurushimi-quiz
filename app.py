@@ -39,8 +39,8 @@ QUESTION_SENTENCE = "次の例文は「問題」と「苦しみ」のどちら�
 EXCEL_DISPLAY_NAME = "問題と苦しみ.xlsx"
 FOOTER_CREDIT = "Produced by AI Fusion Service"  # 英語で表記
 LEVEL_LABEL = "難易度を選んでください"
-LEVEL_EASY = "簡単（結果のみ表示）"
-LEVEL_HARD = "高難度（不正解時に正解・解説を表示）"
+LEVEL_EASY = "レベル1（結果のみ表示）"
+LEVEL_HARD = "レベル2（不正解時に正解・解説を表示）"
 
 # Excelの表記ミスを表示時に置き換える（正しい文言はExcel側の修正が望ましい）
 TEXT_CORRECTIONS = {
