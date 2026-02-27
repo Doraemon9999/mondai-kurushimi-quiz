@@ -153,10 +153,12 @@ def load_one_sheet(excel_path, sheet_name):
 
 
 def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
-    """問題データをすべて取り出し、その中からランダムに num 問（既定10問）を抽出して出題リストを返す。"""
+    """問題データをすべて取り出し、その中からランダムに num 問（既定10問）を抽出して出題リストを返す。データが不足する場合は同じリストから重複を許して抽選し、常に num 問出題する。"""
     if not data:
         return []
-    # データが num 問未満の場合は全問出題、それ以外はランダムに num 問抽出
+    # 常に num 問出題：データが不足している場合は同じ問題を重複して抽選
+    if len(data) < num:
+        data = data + list(random.choices(data, k=num - len(data)))
     n = min(len(data), num)
     chosen = random.sample(data, n)
     result = []
@@ -495,7 +497,7 @@ if data:
                 if pool >= NUM_QUESTIONS:
                     st.caption(f"（全{pool}問からランダムに{n_show}問出題しています。もう一度テストを始めると別の10問が出ます。）")
                 else:
-                    st.caption(f"（登録されている問題は{pool}件です。10問で出題するにはExcelのNO1・NO2シートに行を追加してください。）")
+                    st.caption(f"（登録されている問題は{pool}件のため、同じ問題を含めて10問出題しています。）")
             st.markdown("**【出来事】**")
             st.markdown(f'<div class="quiz-info-box" translate="no">{html.escape(q["出来事"])}</div>', unsafe_allow_html=True)
             st.markdown("**【どのように感じたか】**")
