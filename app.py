@@ -254,8 +254,9 @@ if "level_choice" not in st.session_state:
 if "show_explanations" not in st.session_state:
     st.session_state.show_explanations = False
 
-# 正しいバージョン確認用（ボタンは「問題」と「苦しみ」です）
-st.markdown('<p class="caption" lang="ja" translate="no">このテストでは、選択肢は「問題」と「苦しみ」の2つです。</p>', unsafe_allow_html=True)
+# クイズ中は「次の例文は…」を一番上に出すため、この説明は出題中は表示しない
+if not st.session_state.quiz_started:
+    st.markdown('<p class="caption" lang="ja" translate="no">このテストでは、選択肢は「問題」と「苦しみ」の2つです。</p>', unsafe_allow_html=True)
 # データ読み込み（設定済みExcelを優先 → スマホではアップロード不要で利用可能）
 excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "問題と苦しみ.xlsx")
 data = []
