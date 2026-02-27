@@ -19,6 +19,32 @@ COL_MONDAI = 2
 COL_KURUSHIMI = 3
 COL_KAITO = 4
 
+# 同梱Excelが少ない行数のとき用のサンプル（10問分）。行が足りない場合に補完して必ず10問出題する
+_DEFAULT_SAMPLE_ROWS = [
+    {"出来事": "一日が終わる。", "問題": "24時間が経過した。", "苦しみ": "時間が足りないと焦った。", "回答": "「問題」は事実、「苦しみ」は心の反応です。"},
+    {"出来事": "プレゼンで少し噛んだ。", "問題": "発言が一部聞き取りにくい。", "苦しみ": "恥ずかしい、失敗したと思った。", "回答": "同上"},
+    {"出来事": "雨が降った。", "問題": "傘がなくて濡れた。", "苦しみ": "最悪だ、嫌だと思った。", "回答": "同上"},
+    {"出来事": "遅刻しそうになった。", "問題": "電車が遅延した。", "苦しみ": "イライラした、不安になった。", "回答": "同上"},
+    {"出来事": "仕事でミスをした。", "問題": "報告書に誤りがあった。", "苦しみ": "自分はダメだと思った。", "回答": "同上"},
+    {"出来事": "友人に連絡が取れない。", "問題": "返信が来ない。", "苦しみ": "嫌われたかもと心配した。", "回答": "同上"},
+    {"出来事": "試験の結果が届いた。", "問題": "合格ラインに届かなかった。", "苦しみ": "落ち込んだ、悲しい。", "回答": "同上"},
+    {"出来事": "荷物が届かなかった。", "問題": "配達が遅れている。", "苦しみ": "不安でたまらない。", "回答": "同上"},
+    {"出来事": "会議で反対された。", "問題": "意見が通らなかった。", "苦しみ": "悔しい、認められない。", "回答": "同上"},
+    {"出来事": "体調が悪い。", "問題": "熱がある。", "苦しみ": "つらい、早く治りたい。", "回答": "同上"},
+]
+
+
+def _ensure_min_questions(data_list, min_len=NUM_QUESTIONS):
+    """data_list が min_len 未満なら、サンプル行を追加して min_len 以上にする。"""
+    if len(data_list) >= min_len:
+        return data_list
+    need = min_len - len(data_list)
+    extra = random.sample(_DEFAULT_SAMPLE_ROWS, min(need, len(_DEFAULT_SAMPLE_ROWS)))
+    if need > len(extra):
+        while len(extra) < need:
+            extra.append(random.choice(_DEFAULT_SAMPLE_ROWS))
+    return data_list + extra
+
 
 def _find_col(df, names):
     """列名で列インデックスを返す。完全一致のあと、列名の先頭一致・含むで判定。"""
@@ -107,7 +133,7 @@ def load_data(excel_path, sheet_name=None):
 
 
 def _sheet_for_level(xl, level_num):
-    """level_num が 1 ならレベル1用、2 ならレベル2用。「レベル1」「NO1」「ＮＯ１」等を認識。"""
+    """level_num が 1 ならレベル1用、2 ならレベル2用。「レベル1」「NO1」「ＮＯ１」等を認識。シートの全行を読み込む（件数制限なし）。"""
     names = xl.sheet_names
     def nfkc(t):
         return unicodedata.normalize("NFKC", str(t).strip())
@@ -130,7 +156,7 @@ def _sheet_for_level(xl, level_num):
 
 
 def load_data_level1_level2(excel_path):
-    """Excel を1回だけ開き、(data_level1, data_level2, シート名のリスト) を返す。"""
+    """Excel を1回だけ開き、各シートの全行を読み (data_level1, data_level2, シート名のリスト) を返す。行数制限はしない。"""
     try:
         xl = pd.ExcelFile(excel_path)
         data_level1 = _sheet_for_level(xl, 1)
@@ -153,10 +179,12 @@ def load_one_sheet(excel_path, sheet_name):
 
 
 def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
-    """ランダムに num 問選び、リストで返す。"""
-    if len(data) < num:
-        num = len(data)
-    chosen = random.sample(data, num)
+    """問題データをすべて取り出し、その中からランダムに num 問（既定10問）を抽出して出題リストを返す。"""
+    if not data:
+        return []
+    # データが num 問未満の場合は全問出題、それ以外はランダムに num 問抽出
+    n = min(len(data), num)
+    chosen = random.sample(data, n)
     result = []
     for row in chosen:
         show_mondai = random.choice([True, False])
@@ -290,6 +318,10 @@ else:
                 st.session_state.excel_path_for_choice = excel_path
                 st.session_state.uploaded_excel_bytes = None
                 data_from_builtin = True
+                # 同梱Excelが2行だけなど少ない場合、サンプルで補完して必ず10問出題できるようにする
+                data_level1 = _ensure_min_questions(data_level1)
+                data_level2 = _ensure_min_questions(data_level2)
+                data = data_level1 or data_level2
         except Exception:
             pass
 
@@ -449,6 +481,7 @@ if data:
                 st.error("選択したレベル（シート）にデータがありません。もう一方のシートか、先頭シートにデータがあるか確認してください。")
             else:
                 st.session_state.questions = run_quiz(data_to_use, st.session_state.level_difficult)
+                st.session_state.quiz_pool_size = len(data_to_use)  # 全何問から抽選したか（表示用）
                 st.session_state.quiz_started = True
                 st.session_state.quiz_done = False
                 st.session_state.current_index = 0
@@ -485,6 +518,10 @@ if data:
         else:
             idx = st.session_state.current_index
             st.markdown(f'<p lang="ja" translate="no">{QUESTION_SENTENCE}</p>', unsafe_allow_html=True)
+            pool = st.session_state.get("quiz_pool_size")
+            n_show = len(st.session_state.questions)
+            if pool is not None and pool > n_show and idx == 0:
+                st.caption(f"（全{pool}問からランダムに{n_show}問出題しています。もう一度テストを始めると別の10問が出ます。）")
             st.markdown("**【出来事】**")
             st.markdown(f'<div class="quiz-info-box" translate="no">{html.escape(q["出来事"])}</div>', unsafe_allow_html=True)
             st.markdown("**【どのように感じたか】**")
