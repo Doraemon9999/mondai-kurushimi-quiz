@@ -58,6 +58,13 @@ def _apply_corrections(text):
     return TEXT_CORRECTIONS.get(t, text)
 
 
+def _strip_level2_suffix(text):
+    """レベル1用: データに付いている「【レベル2】」を表示から除けるよう取り除く。"""
+    if not text or not isinstance(text, str):
+        return text
+    return text.replace("【レベル2】", "").strip()
+
+
 def _df_to_rows(df):
     """DataFrame を行リストに変換。"""
     idx_dekigoto = _find_col(df, ["出来事", "イベント"])
@@ -168,11 +175,19 @@ def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
             example_text, correct_label = row["苦しみ"], LABEL_KURUSHIMI
         else:
             example_text, correct_label = row["問題"], LABEL_MONDAI
+        dekigoto = _apply_corrections(row["出来事"])
+        example_text = _apply_corrections(example_text)
+        kaito = row.get("回答", "")
+        # レベル1出題時は「【レベル2】」を表示しない（レベル1の問題の後ろについているだけの表記なので除去）
+        if not level_difficult:
+            dekigoto = _strip_level2_suffix(dekigoto)
+            example_text = _strip_level2_suffix(example_text)
+            kaito = _strip_level2_suffix(kaito) if kaito else kaito
         result.append({
-            "出来事": _apply_corrections(row["出来事"]),
-            "例文": _apply_corrections(example_text),
+            "出来事": dekigoto,
+            "例文": example_text,
             "正解": correct_label,
-            "解説": row.get("回答", ""),
+            "解説": kaito,
             "level_difficult": level_difficult,
         })
     return result
