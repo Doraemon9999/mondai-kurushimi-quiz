@@ -256,7 +256,7 @@ if "show_explanations" not in st.session_state:
 
 # 正しいバージョン確認用（ボタンは「問題」と「苦しみ」です）
 st.markdown('<p class="caption" lang="ja" translate="no">このテストでは、選択肢は「問題」と「苦しみ」の2つです。</p>', unsafe_allow_html=True)
-# データ読み込み（アップロードを優先。なければ同フォルダの Excel）
+# データ読み込み（設定済みExcelを優先 → スマホではアップロード不要で利用可能）
 excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "問題と苦しみ.xlsx")
 data = []
 data_level1 = []
@@ -264,6 +264,7 @@ data_level2 = []
 actual_name = ""
 use_fallback = False
 sheet_names_found = []
+data_from_builtin = False  # 同梱の問題と苦しみ.xlsx で読み込んだか
 
 if st.session_state.get("sheet_choice_done") and st.session_state.get("data_level1_override") is not None:
     data_level1 = st.session_state.data_level1_override
@@ -272,32 +273,8 @@ if st.session_state.get("sheet_choice_done") and st.session_state.get("data_leve
     data = data_level1 or data_level2
     use_fallback = False
 else:
-    uploaded = st.file_uploader("問題データ（Excel）をアップロードしてください", type=["xlsx"])
-    if uploaded:
-        st.session_state.sheet_choice_done = False
-        try:
-            file_bytes = uploaded.read()
-            st.session_state.uploaded_excel_bytes = file_bytes
-            st.session_state.uploaded_name = uploaded.name
-            buf = io.BytesIO(file_bytes)
-            data_level1, data_level2, sheet_names_found = load_data_level1_level2(buf)
-            actual_name = uploaded.name
-            data = data_level1 or data_level2
-            if not data:
-                buf.seek(0)
-                data_fallback = load_data(buf, sheet_name=None)
-                if data_fallback:
-                    data_level1, data_level2 = data_fallback, data_fallback
-                    data = data_fallback
-                    use_fallback = True
-            if data and not use_fallback:
-                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} から レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件読み込みました。</div></div>', unsafe_allow_html=True)
-            elif data and use_fallback and len(sheet_names_found) < 2:
-                sheets_info = "このファイルのシート名: 「" + "」「".join(html.escape(s) for s in sheet_names_found) + "」。" if sheet_names_found else ""
-                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} の先頭シートから {len(data)} 件読み込みました。<br>{sheets_info}別々のデータにするには下でシートを選んでください。</div></div>', unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"読み込みエラー: {e}")
-    elif os.path.isfile(excel_path):
+    # まず同梱の「問題と苦しみ.xlsx」があれば読み込む（スマホではアップロード不要）
+    if os.path.isfile(excel_path):
         try:
             data_level1, data_level2, sheet_names_found = load_data_level1_level2(excel_path)
             actual_name = os.path.basename(excel_path)
@@ -308,15 +285,99 @@ else:
                     data_level1, data_level2 = data_fallback, data_fallback
                     data = data_fallback
                     use_fallback = True
-            st.session_state.excel_path_for_choice = excel_path
-            st.session_state.uploaded_excel_bytes = None
-            if data and not use_fallback:
-                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} から レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件読み込みました。</div></div>', unsafe_allow_html=True)
-            elif data and use_fallback and len(sheet_names_found) < 2:
-                sheets_info = "このファイルのシート名: 「" + "」「".join(html.escape(s) for s in sheet_names_found) + "」。" if sheet_names_found else ""
-                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} の先頭シートから {len(data)} 件読み込みました。<br>{sheets_info}別々のデータにするには下でシートを選んでください。</div></div>', unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Excelの読み込みに失敗しました: {e}")
+            if data:
+                st.session_state.excel_path_for_choice = excel_path
+                st.session_state.uploaded_excel_bytes = None
+                data_from_builtin = True
+        except Exception:
+            pass
+
+    if data_from_builtin:
+        # データは既にあるのでアップロード案内は一切出さない（「問題データをアップロードしてください」「Drag and drop」非表示）
+        # 別のExcelを使う場合は下の「別のExcelファイル・シートでやり直す」ボタンで対応
+        pass
+    else:
+        # 同梱ファイルがない場合：まずセッションまたは同梱パスから復元を試みる（URL再表示でもアップロード欄を出さないため）
+        if not data and os.path.isfile(excel_path):
+            try:
+                data_level1, data_level2, sheet_names_found = load_data_level1_level2(excel_path)
+                actual_name = os.path.basename(excel_path)
+                data = data_level1 or data_level2
+                if not data:
+                    data_fallback = load_data(excel_path, sheet_name=None)
+                    if data_fallback:
+                        data_level1, data_level2 = data_fallback, data_fallback
+                        data = data_fallback
+                        use_fallback = True
+                st.session_state.excel_path_for_choice = excel_path
+                st.session_state.uploaded_excel_bytes = None
+            except Exception:
+                pass
+        if not data and st.session_state.get("uploaded_excel_bytes"):
+            try:
+                buf = io.BytesIO(st.session_state.uploaded_excel_bytes)
+                data_level1, data_level2, sheet_names_found = load_data_level1_level2(buf)
+                data = data_level1 or data_level2
+                if not data:
+                    buf.seek(0)
+                    data_fallback = load_data(buf, sheet_name=None)
+                    if data_fallback:
+                        data_level1, data_level2 = data_fallback, data_fallback
+                        data = data_fallback
+            except Exception:
+                pass
+
+        # データがまだ無いときだけ「問題データをアップロードしてください」と Drag and drop を表示
+        if not data:
+            uploaded = st.file_uploader("問題データ（Excel）をアップロードしてください", type=["xlsx"])
+            if uploaded:
+                st.session_state.sheet_choice_done = False
+                try:
+                    file_bytes = uploaded.read()
+                    st.session_state.uploaded_excel_bytes = file_bytes
+                    st.session_state.uploaded_name = uploaded.name
+                    buf = io.BytesIO(file_bytes)
+                    data_level1, data_level2, sheet_names_found = load_data_level1_level2(buf)
+                    actual_name = uploaded.name
+                    data = data_level1 or data_level2
+                    if not data:
+                        buf.seek(0)
+                        data_fallback = load_data(buf, sheet_name=None)
+                        if data_fallback:
+                            data_level1, data_level2 = data_fallback, data_fallback
+                            data = data_fallback
+                            use_fallback = True
+                    if data:
+                        st.rerun()  # 再実行してアップロード欄を消し、GOOD表示（クイズのみ）にする
+                    if data and not use_fallback:
+                        st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} から レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件読み込みました。</div></div>', unsafe_allow_html=True)
+                    elif data and use_fallback and len(sheet_names_found) < 2:
+                        sheets_info = "このファイルのシート名: 「" + "」「".join(html.escape(s) for s in sheet_names_found) + "」。" if sheet_names_found else ""
+                        st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} の先頭シートから {len(data)} 件読み込みました。<br>{sheets_info}別々のデータにするには下でシートを選んでください。</div></div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"読み込みエラー: {e}")
+            elif os.path.isfile(excel_path):
+                try:
+                    data_level1, data_level2, sheet_names_found = load_data_level1_level2(excel_path)
+                    actual_name = os.path.basename(excel_path)
+                    data = data_level1 or data_level2
+                    if not data:
+                        data_fallback = load_data(excel_path, sheet_name=None)
+                        if data_fallback:
+                            data_level1, data_level2 = data_fallback, data_fallback
+                            data = data_fallback
+                            use_fallback = True
+                    st.session_state.excel_path_for_choice = excel_path
+                    st.session_state.uploaded_excel_bytes = None
+                    if data:
+                        st.rerun()  # 再実行してアップロード欄を消し、GOOD表示にする
+                    if data and not use_fallback:
+                        st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} から レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件読み込みました。</div></div>', unsafe_allow_html=True)
+                    elif data and use_fallback and len(sheet_names_found) < 2:
+                        sheets_info = "このファイルのシート名: 「" + "」「".join(html.escape(s) for s in sheet_names_found) + "」。" if sheet_names_found else ""
+                        st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} の先頭シートから {len(data)} 件読み込みました。<br>{sheets_info}別々のデータにするには下でシートを選んでください。</div></div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Excelの読み込みに失敗しました: {e}")
 
     if use_fallback and len(sheet_names_found) >= 2:
         st.markdown('<p lang="ja" translate="no"><strong>レベル1・レベル2に使うシートを選んでください。</strong><br>（番号はExcelのシートの並び順です。ブラウザの自動翻訳をオフにすると表示が安定します。）</p>', unsafe_allow_html=True)
