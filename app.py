@@ -461,19 +461,19 @@ if data:
                 st.rerun()
         st.markdown(f'<p class="app-title-same" lang="ja" translate="no">{APP_TITLE}</p>', unsafe_allow_html=True)
         st.markdown(f'<p lang="ja" translate="no"><strong>難易度を選んでください</strong></p>', unsafe_allow_html=True)
-        # フォーム内にすると「送信」時に選ばれたレベルが確実に渡る
+        # フォーム内にすると「送信」時に選ばれたレベルが確実に渡る。値は 0=レベル1, 1=レベル2 で判定（文言比較は翻訳でずれるため使わない）
         with st.form("quiz_start_form"):
-            level = st.radio(
+            level_index = st.radio(
                 " ",
-                [LEVEL_EASY, LEVEL_HARD],
+                options=[0, 1],
+                format_func=lambda i: [LEVEL_EASY, LEVEL_HARD][i],
                 index=0,
                 horizontal=True,
+                key="level_radio_index",
             )
             submitted = st.form_submit_button("テスト開始（10問）")
         if submitted:
-            level_options = [LEVEL_EASY, LEVEL_HARD]
-            selected_index = level_options.index(level) if level in level_options else 0
-            is_level2 = (selected_index == 1)
+            is_level2 = (level_index == 1)
             st.session_state.level_difficult = is_level2
             st.session_state.show_explanations = is_level2
             data_to_use = data_level2 if is_level2 else data_level1
