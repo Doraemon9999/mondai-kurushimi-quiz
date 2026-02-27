@@ -130,7 +130,7 @@ def _sheet_for_level(xl, level_num):
 
 
 def load_data_level1_level2(excel_path):
-    """Excel を1回だけ開き、各シートの全行を読み (data_level1, data_level2, シート名のリスト) を返す。行数制限はしない。"""
+    """Excel を1回だけ開き、各シートの全行を1件も漏らさず読み (data_level1, data_level2, シート名のリスト) を返す。100問あれば100件すべて読み込み、行数制限はしない。"""
     try:
         xl = pd.ExcelFile(excel_path)
         data_level1 = _sheet_for_level(xl, 1)
@@ -153,10 +153,10 @@ def load_one_sheet(excel_path, sheet_name):
 
 
 def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
-    """問題データをすべて取り出し、その中からランダムに num 問（既定10問）を抽出して出題リストを返す。データが num 未満の場合はある分だけ出題（重複はしない）。"""
+    """Excelから読み込んだ全件（data）をそのまま受け取り、全件の中から重複なくランダムに num 問を抽選して出題する。事前の10件抽出は行わない。"""
     if not data:
         return []
-    # データが num 問以上ならランダムに num 問、未満なら全問をランダムな順で出題
+    # data はシートの全行（例: 100問）。ここからランダムに num 問（既定10問）を抽選
     n = min(len(data), num)
     chosen = random.sample(data, n)
     result = []
@@ -447,9 +447,11 @@ if data:
             )
             submitted = st.form_submit_button("テスト開始（10問）")
         if submitted:
-            is_level2 = (level_index == 1)
+            # 0/1 が文字列で渡る環境もあるため両方で判定
+            is_level2 = (level_index == 1 or level_index == "1")
             st.session_state.level_difficult = is_level2
             st.session_state.show_explanations = is_level2
+            st.session_state.quiz_level_index = int(level_index) if level_index in (0, 1, "0", "1") else 0
             data_to_use = data_level2 if is_level2 else data_level1
             if not data_to_use:
                 st.error("選択したレベル（シート）にデータがありません。もう一方のシートか、先頭シートにデータがあるか確認してください。")
@@ -468,6 +470,10 @@ if data:
 
     elif not st.session_state.quiz_done:
         q = st.session_state.questions[st.session_state.current_index]
+        # 出題中のレベルを表示（レベル2を選んだのにレベル1の問題に見える場合の確認用）
+        lev_idx = st.session_state.get("quiz_level_index", 0)
+        level_label = "レベル2（NO2シート・不正解時に解説表示）" if (lev_idx == 1 or lev_idx == "1") else "レベル1（NO1シート）"
+        st.caption(f"出題: **{level_label}**")
         st.markdown('<div class="quiz-content-min-height">', unsafe_allow_html=True)
         if st.session_state.answered_current and st.session_state.last_correct is not None:
             if st.session_state.last_correct:
@@ -496,7 +502,7 @@ if data:
             n_show = len(st.session_state.questions)
             if pool is not None and idx == 0:
                 if pool >= NUM_QUESTIONS:
-                    st.caption(f"（全{pool}問からランダムに10問出題しています。もう一度テストを始めると別の10問が出ます。）")
+                    st.caption(f"（Excelの全{pool}問を読み込み、その全件からランダムに10問を抽選して出題しています。もう一度テストを始めると別の10問が出ます。）")
                 else:
                     st.caption(f"（登録されている問題は{pool}件のため{n_show}問出題しています。10問をランダムに出題するには、Excelのシートに10行以上入れてください。）")
             st.markdown("**【出来事】**")
