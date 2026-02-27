@@ -4,8 +4,10 @@
 URLを知っている人がブラウザでアクセスして利用できます。
 """
 import html
+import io
 import os
 import random
+import unicodedata
 
 import pandas as pd
 import streamlit as st
@@ -56,19 +58,18 @@ def _apply_corrections(text):
     return TEXT_CORRECTIONS.get(t, text)
 
 
-def load_data(excel_path):
-    """Excelを読み込み、行リストを返す。1行目がヘッダーの場合は列名で判定。"""
-    df = pd.read_excel(excel_path)
+def _df_to_rows(df):
+    """DataFrame を行リストに変換。"""
     idx_dekigoto = _find_col(df, ["出来事", "イベント"])
-    idx_mondai = _find_col(df, ["問題"])
-    idx_kurushimi = _find_col(df, ["苦しみ"])
-    idx_kaito = _find_col(df, ["回答", "解説"])
     if idx_dekigoto is None:
         idx_dekigoto = COL_DEKIGOTO
+    idx_mondai = _find_col(df, ["問題"])
     if idx_mondai is None:
         idx_mondai = COL_MONDAI
+    idx_kurushimi = _find_col(df, ["苦しみ"])
     if idx_kurushimi is None:
         idx_kurushimi = COL_KURUSHIMI
+    idx_kaito = _find_col(df, ["回答", "解説"])
     if idx_kaito is None and len(df.columns) > COL_KAITO:
         idx_kaito = COL_KAITO
     rows = []
@@ -82,6 +83,73 @@ def load_data(excel_path):
         if dekigoto and (mondai or kurushimi):
             rows.append({"出来事": dekigoto, "問題": mondai, "苦しみ": kurushimi, "回答": kaito})
     return rows
+
+
+def load_data(excel_path, sheet_name=None):
+    """Excelを読み込み、行リストを返す。sheet_name を指定するとそのシートを読む。"""
+    try:
+        if sheet_name is None:
+            df = pd.read_excel(excel_path)
+            return _df_to_rows(df)
+        xl = pd.ExcelFile(excel_path)
+        want = sheet_name.strip()
+        chosen = None
+        for s in xl.sheet_names:
+            if s.strip() == want:
+                chosen = s
+                break
+        if chosen is None:
+            return []
+        df = pd.read_excel(xl, sheet_name=chosen)
+        return _df_to_rows(df)
+    except Exception:
+        return []
+
+
+def _sheet_for_level(xl, level_num):
+    """level_num が 1 ならレベル1用、2 ならレベル2用。「レベル1」「NO1」「ＮＯ１」等を認識。"""
+    names = xl.sheet_names
+    def nfkc(t):
+        return unicodedata.normalize("NFKC", str(t).strip())
+    def norm(t):
+        s = nfkc(t)
+        return "".join(c for c in s.upper() if c not in " .・")
+    if level_num == 1:
+        for s in names:
+            n = "".join(nfkc(s).split())
+            n_asc = norm(s)
+            if n == "レベル1" or n_asc == "NO1" or n_asc == "NO.1":
+                return _df_to_rows(pd.read_excel(xl, sheet_name=s))
+    else:
+        for s in names:
+            n = "".join(nfkc(s).split())
+            n_asc = norm(s)
+            if n == "レベル2" or n_asc == "NO2" or n_asc == "NO.2":
+                return _df_to_rows(pd.read_excel(xl, sheet_name=s))
+    return []
+
+
+def load_data_level1_level2(excel_path):
+    """Excel を1回だけ開き、(data_level1, data_level2, シート名のリスト) を返す。"""
+    try:
+        xl = pd.ExcelFile(excel_path)
+        data_level1 = _sheet_for_level(xl, 1)
+        data_level2 = _sheet_for_level(xl, 2)
+        return data_level1, data_level2, list(xl.sheet_names)
+    except Exception:
+        return [], [], []
+
+
+def load_one_sheet(excel_path, sheet_name):
+    """指定したシート名で1シートだけ読み、行リストを返す。"""
+    try:
+        xl = pd.ExcelFile(excel_path)
+        if sheet_name not in xl.sheet_names:
+            return []
+        df = pd.read_excel(xl, sheet_name=sheet_name)
+        return _df_to_rows(df)
+    except Exception:
+        return []
 
 
 def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
@@ -116,11 +184,30 @@ st.markdown("""
     .stButton > button:hover { background: #1976D2 !important; color: white !important; }
     div[data-testid="stSidebar"] .stButton > button { width: 100%; }
     .quiz-section { margin: 0.5em 0 0.2em 0; font-weight: bold; }
-    .footer-credit { position: fixed; bottom: 8px; right: 12px; font-size: 0.75rem; color: #888; }
+    .footer-credit { position: fixed !important; bottom: 8px !important; left: 50% !important; transform: translateX(-50%) !important; font-size: 0.75rem; color: #888; }
     .app-title-same { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
     .quiz-content-min-height { min-height: 0; }
     p.caption { font-size: 0.88rem; color: #808495; margin-top: -0.5rem; }
     .load-success { padding: 0.75rem 1rem; border-radius: 0.25rem; background: #d4edda; color: #155724; margin: 0.5rem 0; }
+    .load-msg-mobile-hide { }
+    @media (max-width: 1024px), (max-width: 768px), (max-device-width: 1024px) {
+        .load-msg-mobile-hide {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important; min-height: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+            overflow: hidden !important;
+            position: absolute !important;
+            left: -9999px !important;
+        }
+        .load-success {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important; min-height: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+            overflow: hidden !important;
+        }
+    }
     .quiz-info-box { padding: 1rem; border-radius: 0.25rem; background: #e8f4fd; border-left: 4px solid #1e88e5; margin: 0.5rem 0; }
 </style>
 <script>
@@ -162,46 +249,153 @@ if "last_correct" not in st.session_state:
     st.session_state.last_correct = None
 if "last_wrong_detail" not in st.session_state:
     st.session_state.last_wrong_detail = None
+if "level_choice" not in st.session_state:
+    st.session_state["level_choice"] = LEVEL_EASY
+if "show_explanations" not in st.session_state:
+    st.session_state.show_explanations = False
 
 # 正しいバージョン確認用（ボタンは「問題」と「苦しみ」です）
 st.markdown('<p class="caption" lang="ja" translate="no">このテストでは、選択肢は「問題」と「苦しみ」の2つです。</p>', unsafe_allow_html=True)
-# データ読み込み（同フォルダの Excel またはアップロード）
+# データ読み込み（アップロードを優先。なければ同フォルダの Excel）
 excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "問題と苦しみ.xlsx")
 data = []
-if os.path.isfile(excel_path):
-    try:
-        data = load_data(excel_path)
-        actual_name = os.path.basename(excel_path)
-        st.markdown(f'<div class="load-success" translate="no">{html.escape(actual_name)} から {len(data)} 件読み込みました。</div>', unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Excelの読み込みに失敗しました: {e}")
-if not data:
+data_level1 = []
+data_level2 = []
+actual_name = ""
+use_fallback = False
+sheet_names_found = []
+
+if st.session_state.get("sheet_choice_done") and st.session_state.get("data_level1_override") is not None:
+    data_level1 = st.session_state.data_level1_override
+    data_level2 = st.session_state.data_level2_override
+    actual_name = st.session_state.get("actual_name_override", "")
+    data = data_level1 or data_level2
+    use_fallback = False
+else:
     uploaded = st.file_uploader("問題データ（Excel）をアップロードしてください", type=["xlsx"])
     if uploaded:
+        st.session_state.sheet_choice_done = False
         try:
-            data = load_data(uploaded)
+            file_bytes = uploaded.read()
+            st.session_state.uploaded_excel_bytes = file_bytes
+            st.session_state.uploaded_name = uploaded.name
+            buf = io.BytesIO(file_bytes)
+            data_level1, data_level2, sheet_names_found = load_data_level1_level2(buf)
             actual_name = uploaded.name
-            st.markdown(f'<div class="load-success" translate="no">{html.escape(actual_name)} として {len(data)} 件読み込みました。</div>', unsafe_allow_html=True)
+            data = data_level1 or data_level2
+            if not data:
+                buf.seek(0)
+                data_fallback = load_data(buf, sheet_name=None)
+                if data_fallback:
+                    data_level1, data_level2 = data_fallback, data_fallback
+                    data = data_fallback
+                    use_fallback = True
+            if data and not use_fallback:
+                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} から レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件読み込みました。</div></div>', unsafe_allow_html=True)
+            elif data and use_fallback and len(sheet_names_found) < 2:
+                sheets_info = "このファイルのシート名: 「" + "」「".join(html.escape(s) for s in sheet_names_found) + "」。" if sheet_names_found else ""
+                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} の先頭シートから {len(data)} 件読み込みました。<br>{sheets_info}別々のデータにするには下でシートを選んでください。</div></div>', unsafe_allow_html=True)
         except Exception as e:
             st.error(f"読み込みエラー: {e}")
+    elif os.path.isfile(excel_path):
+        try:
+            data_level1, data_level2, sheet_names_found = load_data_level1_level2(excel_path)
+            actual_name = os.path.basename(excel_path)
+            data = data_level1 or data_level2
+            if not data:
+                data_fallback = load_data(excel_path, sheet_name=None)
+                if data_fallback:
+                    data_level1, data_level2 = data_fallback, data_fallback
+                    data = data_fallback
+                    use_fallback = True
+            st.session_state.excel_path_for_choice = excel_path
+            st.session_state.uploaded_excel_bytes = None
+            if data and not use_fallback:
+                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} から レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件読み込みました。</div></div>', unsafe_allow_html=True)
+            elif data and use_fallback and len(sheet_names_found) < 2:
+                sheets_info = "このファイルのシート名: 「" + "」「".join(html.escape(s) for s in sheet_names_found) + "」。" if sheet_names_found else ""
+                st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">{html.escape(actual_name)} の先頭シートから {len(data)} 件読み込みました。<br>{sheets_info}別々のデータにするには下でシートを選んでください。</div></div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"Excelの読み込みに失敗しました: {e}")
+
+    if use_fallback and len(sheet_names_found) >= 2:
+        st.markdown('<p lang="ja" translate="no"><strong>レベル1・レベル2に使うシートを選んでください。</strong><br>（番号はExcelのシートの並び順です。ブラウザの自動翻訳をオフにすると表示が安定します。）</p>', unsafe_allow_html=True)
+        with st.form("sheet_choice_form"):
+            idx1 = st.selectbox(
+                "レベル1の出題に使うシート",
+                range(len(sheet_names_found)),
+                format_func=lambda i: f"{i+1}枚目",
+                key="sheet1_choice",
+            )
+            idx2 = st.selectbox(
+                "レベル2の出題に使うシート",
+                range(len(sheet_names_found)),
+                format_func=lambda i: f"{i+1}枚目",
+                key="sheet2_choice",
+            )
+            if st.form_submit_button("このシートで出題する"):
+                s1 = sheet_names_found[idx1]
+                s2 = sheet_names_found[idx2]
+                if st.session_state.get("uploaded_excel_bytes"):
+                    buf = io.BytesIO(st.session_state.uploaded_excel_bytes)
+                    d1 = load_one_sheet(buf, s1)
+                    buf2 = io.BytesIO(st.session_state.uploaded_excel_bytes)
+                    d2 = load_one_sheet(buf2, s2)
+                    name = st.session_state.get("uploaded_name", "")
+                else:
+                    path = st.session_state.get("excel_path_for_choice", excel_path)
+                    d1 = load_one_sheet(path, s1)
+                    d2 = load_one_sheet(path, s2)
+                    name = os.path.basename(path)
+                if d1 or d2:
+                    st.session_state.data_level1_override = d1
+                    st.session_state.data_level2_override = d2
+                    st.session_state.actual_name_override = name
+                    st.session_state.sheet_choice_done = True
+                    st.rerun()
+                else:
+                    st.error("選択したシートにデータがありません。")
 
 if data:
     if not st.session_state.quiz_started:
+        if st.session_state.get("sheet_choice_done"):
+            st.markdown(f'<div class="load-msg-mobile-hide"><div class="load-success" translate="no">選択したシートで読み込みました。レベル1: {len(data_level1)}件、レベル2: {len(data_level2)}件。</div></div>', unsafe_allow_html=True)
+            if st.button("別のExcelファイル・シートでやり直す"):
+                for k in ("sheet_choice_done", "data_level1_override", "data_level2_override", "actual_name_override"):
+                    if k in st.session_state:
+                        del st.session_state[k]
+                st.rerun()
         st.markdown(f'<p class="app-title-same" lang="ja" translate="no">{APP_TITLE}</p>', unsafe_allow_html=True)
         st.markdown(f'<p lang="ja" translate="no"><strong>難易度を選んでください</strong></p>', unsafe_allow_html=True)
-        level = st.radio(" ", [LEVEL_EASY, LEVEL_HARD], horizontal=True)  # ラベルは上で「難易度を選んでください」を表示済み
-        st.session_state.level_difficult = LEVEL_HARD in level
-        if st.button("テスト開始（10問）"):
-            st.session_state.questions = run_quiz(data, st.session_state.level_difficult)
-            st.session_state.quiz_started = True
-            st.session_state.quiz_done = False
-            st.session_state.current_index = 0
-            st.session_state.correct_count = 0
-            st.session_state.wrong_answers = []
-            st.session_state.answered_current = False
-            st.session_state.last_correct = None
-            st.session_state.last_wrong_detail = None
-            st.rerun()
+        # フォーム内にすると「送信」時に選ばれたレベルが確実に渡る
+        with st.form("quiz_start_form"):
+            level = st.radio(
+                " ",
+                [LEVEL_EASY, LEVEL_HARD],
+                index=0,
+                horizontal=True,
+            )
+            submitted = st.form_submit_button("テスト開始（10問）")
+        if submitted:
+            level_options = [LEVEL_EASY, LEVEL_HARD]
+            selected_index = level_options.index(level) if level in level_options else 0
+            is_level2 = (selected_index == 1)
+            st.session_state.level_difficult = is_level2
+            st.session_state.show_explanations = is_level2
+            data_to_use = data_level2 if is_level2 else data_level1
+            if not data_to_use:
+                st.error("選択したレベル（シート）にデータがありません。もう一方のシートか、先頭シートにデータがあるか確認してください。")
+            else:
+                st.session_state.questions = run_quiz(data_to_use, st.session_state.level_difficult)
+                st.session_state.quiz_started = True
+                st.session_state.quiz_done = False
+                st.session_state.current_index = 0
+                st.session_state.correct_count = 0
+                st.session_state.wrong_answers = []
+                st.session_state.answered_current = False
+                st.session_state.last_correct = None
+                st.session_state.last_wrong_detail = None
+                st.rerun()
 
     elif not st.session_state.quiz_done:
         q = st.session_state.questions[st.session_state.current_index]
@@ -211,11 +405,13 @@ if data:
                 st.success("正解です。")
             else:
                 st.warning("不正解です。")
-                if st.session_state.level_difficult and st.session_state.last_wrong_detail:
+                # レベル2のときだけ正解・解説を表示
+                if st.session_state.get("show_explanations") is True:
                     d = st.session_state.last_wrong_detail
-                    st.markdown(f'<p class="caption" translate="no"><strong>正解:</strong> 「{html.escape(d["正解"])}」</p>', unsafe_allow_html=True)
-                    if d.get("解説"):
-                        st.markdown(f'<p class="caption" translate="no"><strong>解説:</strong> {html.escape(d["解説"])}</p>', unsafe_allow_html=True)
+                    if d:
+                        st.markdown(f'<p class="caption" translate="no"><strong>正解:</strong> 「{html.escape(d["正解"])}」</p>', unsafe_allow_html=True)
+                        if d.get("解説"):
+                            st.markdown(f'<p class="caption" translate="no"><strong>解説:</strong> {html.escape(d["解説"])}</p>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             if st.button("次の問題へ"):
                 st.session_state.answered_current = False
@@ -233,7 +429,7 @@ if data:
             st.markdown(f'<div class="quiz-info-box" translate="no">{html.escape(q["例文"])}</div>', unsafe_allow_html=True)
             st.caption("※以下のどちらかのボタンをクリックしてください")
             st.markdown('</div>', unsafe_allow_html=True)
-            col1, col2, _ = st.columns([1, 1, 2])
+            col1, col2 = st.columns(2)
             with col1:
                 st.markdown(f'<p lang="ja" translate="no" style="text-align:center; font-weight:600; margin-bottom:0.2rem;">{LABEL_MONDAI}</p>', unsafe_allow_html=True)
                 if st.button("▶", key=f"mondai_{idx}", use_container_width=True):
@@ -272,7 +468,8 @@ if data:
         st.balloons()
         st.success(f"### テストが終了しました")
         st.markdown(f"**結果: {score} / {total} 問正解　得点: {pct} 点**")
-        if st.session_state.wrong_answers:
+        # レベル2のときだけ間違えた問題の正解・解説を表示
+        if st.session_state.wrong_answers and st.session_state.get("show_explanations") is True:
             st.markdown("---")
             st.markdown("**【間違えた問題の正解・解説】**")
             for i, w in enumerate(st.session_state.wrong_answers, 1):
@@ -298,4 +495,7 @@ if data:
             st.session_state.answered_current = False
             st.session_state.last_correct = None
             st.session_state.last_wrong_detail = None
+            st.session_state["level_choice"] = LEVEL_EASY  # レベル選択をリセット（次回はレベル1）
+            if "show_explanations" in st.session_state:
+                del st.session_state["show_explanations"]
             st.rerun()
