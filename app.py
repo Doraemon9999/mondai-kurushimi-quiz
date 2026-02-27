@@ -153,12 +153,10 @@ def load_one_sheet(excel_path, sheet_name):
 
 
 def run_quiz(data, level_difficult, num=NUM_QUESTIONS):
-    """問題データをすべて取り出し、その中からランダムに num 問（既定10問）を抽出して出題リストを返す。データが不足する場合は同じリストから重複を許して抽選し、常に num 問出題する。"""
+    """問題データをすべて取り出し、その中からランダムに num 問（既定10問）を抽出して出題リストを返す。データが num 未満の場合はある分だけ出題（重複はしない）。"""
     if not data:
         return []
-    # 常に num 問出題：データが不足している場合は同じ問題を重複して抽選
-    if len(data) < num:
-        data = data + list(random.choices(data, k=num - len(data)))
+    # データが num 問以上ならランダムに num 問、未満なら全問をランダムな順で出題
     n = min(len(data), num)
     chosen = random.sample(data, n)
     result = []
@@ -433,6 +431,9 @@ if data:
                         del st.session_state[k]
                 st.rerun()
         st.markdown(f'<p class="app-title-same" lang="ja" translate="no">{APP_TITLE}</p>', unsafe_allow_html=True)
+        # 読み込み件数を表示（同じ問題が繰り返される場合、ここが2件ならExcelが未更新＝pushを確認）
+        n1, n2 = len(data_level1), len(data_level2)
+        st.info(f"**読み込み済み:** レベル1＝{n1}件、レベル2＝{n2}件（10件以上で10問がランダムに出題されます）")
         st.markdown(f'<p lang="ja" translate="no"><strong>難易度を選んでください</strong></p>', unsafe_allow_html=True)
         # フォーム内にすると「送信」時に選ばれたレベルが確実に渡る。値は 0=レベル1, 1=レベル2 で判定（文言比較は翻訳でずれるため使わない）
         with st.form("quiz_start_form"):
@@ -495,9 +496,9 @@ if data:
             n_show = len(st.session_state.questions)
             if pool is not None and idx == 0:
                 if pool >= NUM_QUESTIONS:
-                    st.caption(f"（全{pool}問からランダムに{n_show}問出題しています。もう一度テストを始めると別の10問が出ます。）")
+                    st.caption(f"（全{pool}問からランダムに10問出題しています。もう一度テストを始めると別の10問が出ます。）")
                 else:
-                    st.caption(f"（登録されている問題は{pool}件のため、同じ問題を含めて10問出題しています。）")
+                    st.caption(f"（登録されている問題は{pool}件のため{n_show}問出題しています。10問をランダムに出題するには、Excelのシートに10行以上入れてください。）")
             st.markdown("**【出来事】**")
             st.markdown(f'<div class="quiz-info-box" translate="no">{html.escape(q["出来事"])}</div>', unsafe_allow_html=True)
             st.markdown("**【どのように感じたか】**")
