@@ -62,12 +62,12 @@ INTRO_STEPS = (
     '<span class="step-num">3</span> ゲーム終了後に<strong>結果</strong>と<strong>解説</strong>を確認できます → 慣れてきたら<strong>レベル2</strong>に挑戦'
 )
 INTRO_RANDOM = "問題は毎回ランダムで出題されます。"
-GOAL_PHRASE = "ゲームを数回やった後、あなたの考え方や物事の見方が、少し変わっているかもしれません。何問正解できるか試してみましょう。"
+GOAL_PHRASE = "何問正解できるか試してみましょう。<br>ゲームを数回やった後、あなたの考え方や物事の見方が、少し変わっているかもしれません。"
 INTUITION_PHRASE = "直感で答えてください。考えすぎなくて大丈夫です。"
 BUTTON_HINT = "選択するとすぐに次の問題へ進みます。"
 OUTCOME_FACT = "上が事実、下が感情です。<br>この感情が「問題」なのか「苦しみ」なのか判断しボタンを押してください。"
 # テスト開始ボタン（行動イメージが湧く表現）
-BTN_START_QUIZ = "10問に挑戦する"
+BTN_START_QUIZ = "挑戦する"
 
 # Excelの表記ミスを表示時に置き換える（正しい文言はExcel側の修正が望ましい）
 TEXT_CORRECTIONS = {
