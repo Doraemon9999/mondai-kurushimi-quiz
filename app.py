@@ -38,8 +38,8 @@ LABEL_KURUSHIMI = "苦しみ"
 RIGHT_BUTTON_LABEL = "苦しみ"  # 右ボタン表示
 QUESTION_SENTENCE = "次の例文は「問題」と「苦しみ」のどちらに当たりますか？"
 # 問題・回答の参照先（同梱ファイル名）
-EXCEL_DEFAULT_FILENAME = "problem_answers_added.xlsx"
-EXCEL_DISPLAY_NAME = "problem_answers_added.xlsx"
+EXCEL_DEFAULT_FILENAME = "problem_answers_vol3.xlsx"
+EXCEL_DISPLAY_NAME = "problem_answers_vol3.xlsx"
 FOOTER_CREDIT = ""  # 表示しない（AI Fusion Service を削除）
 LEVEL_LABEL = "難易度を選んでください"
 # レベル1・レベル2（両方とも解説付きの処理）
@@ -47,8 +47,8 @@ LEVEL_EASY = "レベル1"
 LEVEL_HARD = "レベル2"
 # 目的・定義（初心者向け）
 PURPOSE_MAIN = (
-    "このゲームは、グルノートをうまく活用する上で必要な「問題」と「苦しみ」の違いを見分ける練習用ゲームです。"
-    " ある出来事が「行動で解決すべき問題」なのか、それとも「考え方や視点を変えることで解決できる苦しみ」なのかを切り分ける力を身につけることが目的です。"
+    "このゲームは、グルノートをうまく活用する上で必要な「問題」と「苦しみ」の違いを見分ける練習ゲームです。"
+    " ある出来事が「行動で解決すべき問題」なのか、それとも「考え方や物事を見る視点を変えることで解決できる苦しみ」なのかを切り分ける力を身につけることが目的です。"
 )
 PURPOSE_MONDAI = "問題の場合 → 行動することで解決します"
 PURPOSE_KURUSHIMI = "苦しみの場合 → その出来事への見方が変わることで解決します"
@@ -85,6 +85,32 @@ def _apply_corrections(text):
 
 def _df_to_rows(df):
     """DataFrame を行リストに変換。"""
+    # --- vol2 形式（番号/思った事/回答(問題|苦しみ)/解説）対応 ---
+    # 列名が文字化けしていても、3列目（index=2）が「問題/苦しみ」になっているかで判定する
+    if df.shape[1] >= 4:
+        try:
+            type_col = df.iloc[:, 2].dropna().astype(str).map(lambda s: s.strip())
+            sample = set(type_col.head(20).tolist())
+        except Exception:
+            sample = set()
+        if (LABEL_MONDAI in sample) or (LABEL_KURUSHIMI in sample):
+            rows = []
+            for i in range(len(df)):
+                thought = str(df.iloc[i, 1]).strip() if pd.notna(df.iloc[i, 1]) else ""
+                type_label = str(df.iloc[i, 2]).strip() if pd.notna(df.iloc[i, 2]) else ""
+                desc = str(df.iloc[i, 3]).strip() if pd.notna(df.iloc[i, 3]) else ""
+
+                # vol2 は「思った事」が全文として入っているため分割せず全文をそのまま例文にする。
+                # （これにより「全文を表示」できる）
+                event_part = ""
+                example_text = thought
+
+                if type_label == LABEL_MONDAI:
+                    rows.append({"出来事": event_part, "問題": example_text, "苦しみ": "", "回答": desc})
+                elif type_label == LABEL_KURUSHIMI:
+                    rows.append({"出来事": event_part, "問題": "", "苦しみ": example_text, "回答": desc})
+            return rows
+
     idx_dekigoto = _find_col(df, ["出来事", "イベント"])
     if idx_dekigoto is None:
         idx_dekigoto = COL_DEKIGOTO
@@ -145,13 +171,13 @@ def _sheet_for_level(xl, level_num):
         for s in names:
             n = "".join(nfkc(s).split())
             n_asc = norm(s)
-            if n == "レベル1" or n_asc == "NO1" or n_asc == "NO.1":
+            if n == "レベル1" or n_asc.startswith("NO1") or n_asc == "NO.1":
                 return _df_to_rows(pd.read_excel(xl, sheet_name=s))
     else:
         for s in names:
             n = "".join(nfkc(s).split())
             n_asc = norm(s)
-            if n == "レベル2" or n_asc == "NO2" or n_asc == "NO.2":
+            if n == "レベル2" or n_asc.startswith("NO2") or n_asc == "NO.2":
                 return _df_to_rows(pd.read_excel(xl, sheet_name=s))
     return []
 
@@ -591,12 +617,9 @@ if data:
             if idx == 0:
                 st.markdown(f'<p class="caption" lang="ja" translate="no">{INTUITION_PHRASE}</p>', unsafe_allow_html=True)
             st.markdown(f'<p lang="ja" translate="no">{QUESTION_SENTENCE}</p>', unsafe_allow_html=True)
-            st.markdown("**【出来事】**")
-            st.markdown(f'<div class="quiz-info-box" translate="no">{html.escape(q["出来事"])}</div>', unsafe_allow_html=True)
-            st.markdown("**【どのように感じたか】**")
+            # 思った事（例文）だけ表示する（見出しラベルは非表示）
             st.markdown(f'<div class="quiz-info-box" translate="no">{html.escape(q["例文"])}</div>', unsafe_allow_html=True)
             if idx == 0:
-                st.markdown(f'<p class="caption" lang="ja" translate="no">{OUTCOME_FACT}</p>', unsafe_allow_html=True)
                 st.caption(BUTTON_HINT)
             st.markdown('</div>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
@@ -647,8 +670,7 @@ if data:
             st.markdown("**【間違えた問題の正解・解説】**")
             for i, w in enumerate(st.session_state.wrong_answers, 1):
                 with st.expander(f"問{i}"):
-                    st.markdown(f'<p translate="no"><strong>出来事:</strong> {html.escape(w["出来事"])}</p>', unsafe_allow_html=True)
-                    st.markdown(f'<p translate="no"><strong>どのように感じたか:</strong> {html.escape(w["例文"])}</p>', unsafe_allow_html=True)
+                    st.markdown(f'<p translate="no"><strong>思った事:</strong> {html.escape(w["例文"])}</p>', unsafe_allow_html=True)
                     st.markdown(
                         f'<p lang="ja" translate="no">'
                         f'<strong>あなたの答え:</strong> {html.escape(w["ユーザーの回答"])}<br><br>'
