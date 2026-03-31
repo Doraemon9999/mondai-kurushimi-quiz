@@ -265,7 +265,15 @@ st.markdown("""
             overflow: hidden !important;
         }
     }
-    .quiz-info-box { padding: 1rem; border-radius: 0.25rem; background: #e8f4fd; border-left: 4px solid #1e88e5; margin: 0.5rem 0; }
+    .quiz-info-box {
+        padding: 1rem;
+        border-radius: 0.25rem;
+        background: #f7fbff !important;
+        border-left: 4px solid #1e88e5;
+        margin: 0.5rem 0;
+        color: #111111 !important;
+    }
+    .quiz-info-box * { color: #111111 !important; }
     .intro-box { padding: 1rem 1.25rem; border-radius: 0.5rem; background: #f5f5f5; border: 1px solid #e0e0e0; margin: 0.75rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6; color: #333; }
     .intro-box strong { color: #1a1a1a; }
     .step-num { display: inline-block; width: 1.5em; height: 1.5em; line-height: 1.4; text-align: center; background: #2196F3; color: white; border-radius: 50%; font-size: 0.85rem; font-weight: bold; margin-right: 0.35rem; }
